@@ -2,7 +2,7 @@
 
 #Check if 2 arguements are provided
 if [[ $# -ne 2 ]]; then
-    echo "Error: Please provide two arguments - directory path and search string."
+    echo "Error: Please provide two arguments - directory path and search string"
     exit 1
 fi
 
