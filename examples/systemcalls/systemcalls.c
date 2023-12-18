@@ -69,6 +69,8 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    if(command[0][0] != "/")
+        return -1;
     int status;
     pid_t pid;
     pid = fork ();
