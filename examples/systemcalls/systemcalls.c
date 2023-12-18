@@ -1,4 +1,10 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,7 +22,12 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+    int status;
+    status = system(cmd);
+    if(status == -1)
+        return false;
+    if (WIFSIGNALED (status))
+        return false;
     return true;
 }
 
@@ -58,6 +69,26 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    int status;
+    pid_t pid;
+    pid = fork ();
+    if (pid == -1)
+        return -1;
+    else if (pid == 0)
+    {
+        const char *argv[count - 1];
+        for(int i = 1; i <= count - 1; i++)
+        {
+            argv[i - 1] = command[i];
+        }
+        execv(command[0], (char* const*)argv);
+        exit (-1);
+    }
+    if(waitpid (pid, &status, 0) == -1)
+        return -1;
+    else if (WIFEXITED (status))
+        return WEXITSTATUS (status);
+    return -1;
 
     va_end(args);
 
@@ -92,6 +123,24 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int fd = open("outputfile", O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if(fd == -1)
+    {
+        perror("open");
+        return -1;
+    }
+    if(dup2(fd, 1) == -1)
+    {
+        perror("dup2");
+        return -1;
+    }
+    const char *argv[count - 1];
+    for(int i = 1; i <= count - 1; i++)
+    {
+        argv[i - 1] = command[i];
+    }
+    execv(command[0], (char* const*)argv);
+    exit (-1);
 
     va_end(args);
 
