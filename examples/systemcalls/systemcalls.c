@@ -1,10 +1,4 @@
 #include "systemcalls.h"
-#include <stdlib.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -15,6 +9,14 @@
 */
 bool do_system(const char *cmd)
 {
+    // printf("cmd: %s" , cmd);
+    if (system(cmd) == -1) {
+        perror("Error in calling system call\n");
+        return false;
+    }
+    return true;
+
+
 
 /*
  * TODO  add your code here
@@ -22,13 +24,7 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-    int status;
-    status = system(cmd);
-    if(status == -1)
-        return false;
-    if (WIFSIGNALED (status))
-        return false;
-    return true;
+
 }
 
 /**
@@ -47,6 +43,7 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
+    pid_t pid;
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -56,6 +53,46 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
+    // this line is to avoid a compile warning before your implementation is complete
+    // and may be removed
+    // command[count] = command[count];
+
+    pid = fork();
+
+    if ( pid == -1 ) {      // if case of error in forking
+        fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+        return false;
+    }
+    else if ( pid > 0 ) {       // if pid is greater then 0 then it is a parent process.
+        int status;
+        printf("This is a parent process with child processID: %d\n" , pid);
+        int return_code = waitpid(pid , &status , 0);
+        if ( return_code == -1 ) {
+            fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+            return false;
+        }
+        if (WEXITSTATUS(status) != 0) {
+            printf("The child has died with exit code: %d\n" , WEXITSTATUS(status));
+            return false;
+
+        } 
+        
+    }
+    else {      // if pid is equal to zero then it is child process.
+        
+        printf("This is a child process : %d\n" , pid);
+        if (execv(command[0] , command) == -1) {
+            // fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+            perror("Error in execv system call\n");
+            exit(1);
+            
+        }
+                
+        
+       
+        
+    }
+    
 
 /*
  * TODO:
@@ -66,28 +103,6 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-    if(command[0][0] != '/')
-        exit(-1);
-    int status;
-    pid_t pid;
-    pid = fork ();
-    if (pid == -1)
-        return -1;
-    else if (pid == 0)
-    {
-        const char *argv[count - 1];
-        for(int i = 1; i <= count - 1; i++)
-        {
-            argv[i - 1] = command[i];
-        }
-        execv(command[0], (char* const*)argv);
-        exit (-1);
-    }
-    if(waitpid (pid, &status, 0) == -1)
-        return -1;
-    else if (WIFEXITED (status))
-        return -1;
-    return -1;
 
     va_end(args);
 
@@ -101,6 +116,8 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+    
+    pid_t pid;
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -108,11 +125,72 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        printf("command[%d] = %s\n" , i , command[i]);
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count]; 
+
+    pid = fork();
+
+
+    if ( pid == -1) {
+        fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+        return false;
+
+
+    }
+    else if ( pid > 0 ) {       // this is parent process
+        int status;   
+       
+        printf("This is a parent process with child processID: %d\n" , pid);
+
+        int return_code = waitpid(pid , &status , 0);
+        if ( return_code == -1 ) {
+            fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+            return false;
+        }
+        if (WEXITSTATUS(status) != 0) {
+            printf("The child has completed the task with status code: %d\n" , WEXITSTATUS(status));
+            return false;
+
+        }
+
+
+
+
+    }
+    else {      // This is child process.
+
+
+        int fd = open(outputfile , O_CREAT | O_RDWR , 00644);
+
+        if ( fd == -1 ) {
+
+            fprintf(stderr , "Error: %d - %s" , errno , strerror(errno));
+            return false;
+        } 
+
+
+        printf("This should go to the standered out\n");
+
+        if (dup2(fd , STDOUT_FILENO) == -1) {
+            perror("Error in duplicating file discriptors\n");
+            return false;
+        }
+
+        if (execv(command[0] , command) == -1) {
+            perror("Error in execv\n");
+            return false;
+        }
+
+
+        close(fd);
+
+
+    }
+
 
 
 /*
@@ -122,26 +200,18 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
-    int fd = open("outputfile", O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    if(fd == -1)
-    {
-        perror("open");
-        return -1;
-    }
-    if(dup2(fd, 1) == -1)
-    {
-        perror("dup2");
-        return -1;
-    }
-    const char *argv[count - 1];
-    for(int i = 1; i <= count - 1; i++)
-    {
-        argv[i - 1] = command[i];
-    }
-    execv(command[0], (char* const*)argv);
-    exit (-1);
 
     va_end(args);
 
     return true;
 }
+// #define REDIRECT_FILE "testfile.txt"
+
+// int main () 
+// {
+
+
+//     // do_system("echo this is a test > " REDIRECT_FILE );
+//     do_exec(2 , "/usr/bin/ls" , "-l");
+//     return 0;
+// }
