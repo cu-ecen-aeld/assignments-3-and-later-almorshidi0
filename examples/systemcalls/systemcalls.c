@@ -87,7 +87,7 @@ bool do_exec(int count, ...)
     if(waitpid (pid, &status, 0) == -1)
         return -1;
     else if (WIFEXITED (status))
-        return WEXITSTATUS (status);
+        return -1;
     return -1;
 
     va_end(args);
